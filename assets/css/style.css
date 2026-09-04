@@ -135,7 +135,7 @@ body::before {
 
 .section-title span { opacity: 0.7; font-size: 11px; letter-spacing: 0; }
 
-.picker { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+.picker { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
 
 .tcard {
   position: relative;
@@ -173,57 +173,140 @@ body::before {
    ========================================================== */
 .stage { margin-top: 16px; }
 
-/* 牌堆（抽卡池） */
-.deck {
+/* 整本票架：一排当前本中未刮开的奖券；抽一张少一张，点击抽取 / 换票 */
+.rack {
+  margin: 0 auto 10px;
+  max-width: 620px;
+  padding: 8px 8px 10px;
+  border-radius: 14px;
+  background: linear-gradient(170deg, rgba(138, 17, 30, 0.6), rgba(96, 11, 22, 0.5));
+  border: 1px solid rgba(248, 220, 150, 0.4);
+  box-shadow: inset 0 0 20px rgba(0, 0, 0, 0.35);
+}
+
+.rack-head {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  flex-wrap: wrap;
+  padding: 0 4px 7px;
+  font-size: 11px;
+  color: rgba(255, 233, 184, 0.72);
+}
+
+.rack-title {
+  font-weight: 800;
+  letter-spacing: 1px;
+  color: #ffe9ae;
+}
+
+.rack-hint {
+  flex: 1 1 auto;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.rack-count { white-space: nowrap; color: rgba(255, 233, 184, 0.9); }
+
+.rack-track {
+  display: flex;
+  gap: 6px;
+  overflow-x: auto;
+  padding: 2px 2px 8px;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 233, 184, 0.55) rgba(0, 0, 0, 0.25);
+}
+.rack-track::-webkit-scrollbar { height: 6px; }
+.rack-track::-webkit-scrollbar-thumb { background: rgba(255, 233, 184, 0.55); border-radius: 3px; }
+.rack-track::-webkit-scrollbar-track { background: rgba(0, 0, 0, 0.25); border-radius: 3px; }
+
+/* 架上小票（每一张=当前本中的一张未开奖券） */
+.rt {
   position: relative;
-  width: 64px;
-  height: 84px;
-  margin: 0 auto 12px;
-  perspective: 420px;
-}
-.deck-card {
-  position: absolute;
-  top: 0;
-  left: 0;
-  width: 64px;
-  height: 84px;
-  border-radius: 8px;
+  flex: 0 0 auto;
+  width: 46px;
+  height: 60px;
+  border-radius: 7px;
+  cursor: pointer;
   background:
-    repeating-linear-gradient(45deg, rgba(255, 255, 255, 0.12) 0 6px, transparent 6px 12px),
+    repeating-linear-gradient(45deg, rgba(255, 255, 255, 0.09) 0 5px, transparent 5px 10px),
     linear-gradient(160deg, #c8202f, #8c0f1d);
-  border: 1px solid rgba(248, 220, 150, 0.55);
-  box-shadow: 0 4px 10px rgba(80, 6, 14, 0.35);
+  border: 1px solid rgba(248, 220, 150, 0.6);
+  box-shadow: 0 3px 8px rgba(80, 6, 14, 0.4);
+  transition: transform 0.12s ease, box-shadow 0.12s ease;
 }
-.deck-card::after {
-  content: "喜";
+.rt:hover { transform: translateY(-3px); box-shadow: 0 6px 13px rgba(80, 6, 14, 0.55); }
+
+.rt .rt-no {
+  position: absolute;
+  top: 3px;
+  left: 0;
+  right: 0;
+  text-align: center;
+  font-size: 8px;
+  color: rgba(255, 255, 255, 0.85);
+}
+
+.rt .rt-xi {
+  display: block;
+  padding-top: 13px;
+  text-align: center;
+  font-size: 22px;
+  line-height: 1;
+  color: #ffe9ae;
+  text-shadow: 0 2px 4px rgba(80, 6, 14, 0.5);
+}
+
+.rt .rt-st {
+  display: block;
+  padding-top: 17px;
+  text-align: center;
+  font-size: 13px;
+  font-weight: 800;
+  letter-spacing: 1px;
+  color: #5b0d15;
+}
+
+.rt .rt-fv {
+  position: absolute;
+  bottom: 5px;
+  left: 0;
+  right: 0;
+  text-align: center;
+  font-size: 10px;
+  font-weight: 800;
+  color: #fff5d9;
+}
+
+/* 手中：这张已被抽走，正显示在下方票面 */
+.rt.is-hand {
+  background: linear-gradient(160deg, #f6d476, #d9a92f);
+  border-color: #ffe9ae;
+  cursor: default;
+  box-shadow: 0 0 0 2px rgba(255, 233, 174, 0.75), 0 3px 8px rgba(0, 0, 0, 0.35);
+}
+.rt.is-hand:hover { transform: none; }
+
+/* 已结算 / 作废：不再可点 */
+.rt.is-gone {
+  cursor: default;
+  opacity: 0.55;
+  filter: grayscale(0.85) brightness(0.9);
+}
+.rt.is-gone:hover { transform: none; box-shadow: none; }
+.rt.is-gone::after {
+  content: "已刮";
   position: absolute;
   inset: 0;
   display: grid;
   place-items: center;
-  font-size: 30px;
+  font-size: 11px;
   font-weight: 900;
-  color: #ffe9ae;
-  text-shadow: 0 2px 5px rgba(80, 6, 14, 0.5);
-}
-.deck-1 { transform: rotate(-9deg) translate(-7px, 2px); opacity: 0.92; }
-.deck-2 { transform: rotate(4deg) translate(6px, 1px); opacity: 0.92; }
-.deck-3 { transform: rotate(0deg); }
-.deck-label {
-  position: absolute;
-  bottom: -18px;
-  left: 50%;
-  transform: translateX(-50%);
-  font-size: 10px;
-  letter-spacing: 2px;
-  color: rgba(255, 233, 184, 0.85);
-  white-space: nowrap;
-}
-.deck.shake { animation: deckShake 0.45s ease; }
-@keyframes deckShake {
-  0%, 100% { transform: translateX(0); }
-  20% { transform: translateX(-5px) rotate(-3deg); }
-  55% { transform: translateX(5px) rotate(3deg); }
-  80% { transform: translateX(-3px); }
+  letter-spacing: 1px;
+  color: #fff;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.6);
 }
 
 /* 抽卡翻入动画（仅用 opacity + translateY，避免影响 canvas 尺寸计算） */
@@ -546,6 +629,8 @@ body::before {
 
 .cell.is-open.is-xi .cell-win,
 .cell.is-open.is-shuang .cell-win { opacity: 1; transform: translateY(0); }
+
+.cell-win.is-zero { visibility: hidden; }
 
 .cell.is-xi.is-open .cell-circle,
 .cell.is-shuang.is-open .cell-circle {
@@ -883,4 +968,139 @@ footer.foot {
   .hud { grid-template-columns: repeat(2, 1fr); }
   .tk-couplet { font-size: 12px; letter-spacing: 5px; }
   .tk-play { grid-template-columns: 22px 1fr 22px; padding: 7px 5px; }
+  .picker { grid-template-columns: repeat(2, 1fr); }
+  .tcard-sub { font-size: 9px; }
 }
+
+/* ==========================================================
+   本（一叠）信息栏：位于票架与票面之间
+   ========================================================== */
+.bookbar {
+  margin: 0 auto 12px;
+  max-width: 430px;
+  padding: 10px 14px 12px;
+  border-radius: 14px;
+  color: #ffe9b3;
+  background: linear-gradient(170deg, rgba(255, 255, 255, 0.14), rgba(255, 255, 255, 0.05));
+  border: 1px solid rgba(255, 232, 174, 0.4);
+  box-shadow: 0 10px 22px rgba(60, 5, 12, 0.25);
+  backdrop-filter: blur(4px);
+}
+
+.bb-top {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 12px;
+}
+
+.bb-title b { font-size: 15px; color: #fff2c2; }
+
+.bb-guard {
+  font-size: 11px;
+  color: #ffd98c;
+  text-align: right;
+}
+
+.bb-guard b { font-size: 14px; color: #ffe9a8; }
+
+.bb-progress {
+  margin: 9px 0 8px;
+  height: 6px;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.3);
+  overflow: hidden;
+}
+
+.bb-progress i {
+  display: block;
+  height: 100%;
+  width: 0;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #f4c76b, #ffe08a);
+  transition: width 0.4s ease;
+}
+
+.bb-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 14px;
+  font-size: 11px;
+  color: rgba(255, 236, 200, 0.85);
+}
+
+.bb-meta b { color: #fff2c2; }
+
+.bb-tag {
+  margin-left: auto;
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-size: 10.5px;
+  font-weight: 700;
+  border: 1px solid rgba(255, 232, 174, 0.45);
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.bb-tag.is-ok {
+  color: #5b0d15;
+  border-color: #e5c266;
+  background: linear-gradient(160deg, #ffe9ae, #e9be5d);
+}
+
+/* ---------- 概率验证面板分组 ---------- */
+.sim-sec { margin-bottom: 16px; }
+
+.sim-sec:last-child { margin-bottom: 0; }
+
+.sim-title {
+  margin-bottom: 8px;
+  padding: 4px 0;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 1px;
+  color: var(--red);
+  border-bottom: 1px dashed rgba(181, 18, 38, 0.25);
+}
+
+.sim-out {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 8px;
+}
+
+.sim-out.has-3 { grid-template-columns: repeat(3, 1fr); }
+
+@media (max-width: 480px) {
+  .sim-out.has-3 { grid-template-columns: repeat(2, 1fr); }
+}
+
+.sim-sec .sim-out .sim-box:first-child:last-child { grid-column: auto; }
+
+/* ---------- 空票态（当前本暂无手牌） ---------- */
+.tk-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 220px;
+  padding: 26px 20px;
+  text-align: center;
+  color: #ffe0a8;
+  border: 1px dashed rgba(255, 224, 168, 0.55);
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.tk-empty-mark {
+  font-family: "STKaiti", "KaiTi", serif;
+  font-size: 56px;
+  color: rgba(255, 224, 168, 0.5);
+  line-height: 1;
+  margin-bottom: 8px;
+}
+
+.tk-empty p { margin: 6px 0; font-size: 13px; }
+
+.tk-empty-tip { font-size: 11px; color: rgba(255, 224, 168, 0.65); max-width: 300px; }
