@@ -2,8 +2,19 @@
 
 「囍相逢」是一款**独立原创的网页刮刮乐演示**，玩法规则与票面结构参考公开票样资料实现，纯前端静态页面，无依赖、无构建，可直接用浏览器打开或托管到 GitHub Pages。
 
-- 在线地址：https://zjw-swun.github.io/xi_caipiao/
+- 在线地址（本仓库）：https://lollipop8555.github.io/ScratchCard/
+- 在线地址（上游）：https://zjw-swun.github.io/xi_caipiao/
 - 本地预览：`python3 -m http.server 8088` 后访问 http://127.0.0.1:8088
+
+## GitHub Pages 部署（本仓库）
+
+仓库已内置 `/.github/workflows/deploy-pages.yml`：每次推送到 `master` 都会自动发布到 Pages。
+
+1. **一次性设置**：仓库 Settings → Pages → Source 选择 **GitHub Actions**（此时可保留默认的自定义域为空）。
+2. **推送触发**：`git push origin master` 后，在 Actions 页看到 `Deploy static content to Pages` 任务跑完即为发布成功。
+3. **访问地址**：见上方「在线地址（本仓库）」（页面资源均为相对路径，无需修改即可在子路径下运行）。
+
+> 提示：本仓库与上游（`zjw-swun.github.io/xi_caipiao`）是两个独立部署，互不影响；上游由源项目维护，本仓库改动不会覆盖它。
 
 ## 玩法（参考公开票样）
 
