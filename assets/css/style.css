@@ -647,7 +647,38 @@ body::before {
 
 .grid.is-dense { gap: 4px 3px; }
 .grid.is-dense .cell-sym { font-size: 21px; }
-.grid.is-dense .tk-rule { font-size: 10px; }
+
+/* ---------- 玩法区二：50 元票顶部好运区（1 行 5 列） ---------- */
+.tk-play.is-bonus {
+  grid-template-columns: 1fr;
+  margin-bottom: 8px;
+  background: rgba(120, 8, 18, 0.24);
+}
+
+.grid-bonus { gap: 5px 4px; }
+
+.cell.is-bonus .cell-sym.is-label {
+  font-family: "STKaiti", "Kaiti SC", "KaiTi", serif;
+  font-size: 19px;
+  font-weight: 900;
+  line-height: 1.05;
+  letter-spacing: 1px;
+  color: #c8901f;
+  text-shadow: 0 1px 0 #fffdf4;
+}
+
+.cell.is-bonus.is-open .cell-sym.is-label {
+  color: #c0101f;
+  font-size: 22px;
+  text-shadow: 0 1px 0 #fff3c9;
+}
+
+.cell-none {
+  font-size: 15px;
+  font-weight: 800;
+  line-height: 1;
+  color: #bca98d;
+}
 
 /* --- 票面下部 --- */
 .tk-rule {
@@ -1078,7 +1109,7 @@ footer.foot {
 
 .sim-sec .sim-out .sim-box:first-child:last-child { grid-column: auto; }
 
-/* ---------- 空票态（当前本暂无手牌） ---------- */
+/* ---------- 空票态（当前本暂无手牌）：金色描边 + 玩法说明 ---------- */
 .tk-empty {
   display: flex;
   flex-direction: column;
@@ -1088,19 +1119,20 @@ footer.foot {
   padding: 26px 20px;
   text-align: center;
   color: #ffe0a8;
-  border: 1px dashed rgba(255, 224, 168, 0.55);
+  border: 1.5px solid rgba(246, 214, 140, 0.85);
   border-radius: 16px;
-  background: rgba(255, 255, 255, 0.04);
+  background: linear-gradient(170deg, rgba(140, 12, 26, 0.86), rgba(92, 8, 18, 0.9));
+  box-shadow: inset 0 0 26px rgba(0, 0, 0, 0.35), 0 10px 24px rgba(60, 5, 12, 0.3);
 }
 
-.tk-empty-mark {
-  font-family: "STKaiti", "KaiTi", serif;
-  font-size: 56px;
-  color: rgba(255, 224, 168, 0.5);
-  line-height: 1;
-  margin-bottom: 8px;
+.tk-empty-title {
+  margin: 0 0 6px;
+  font-size: 15px;
+  font-weight: 800;
+  letter-spacing: 2px;
+  color: #ffe9b3;
 }
 
 .tk-empty p { margin: 6px 0; font-size: 13px; }
 
-.tk-empty-tip { font-size: 11px; color: rgba(255, 224, 168, 0.65); max-width: 300px; }
+.tk-empty-tip { font-size: 11.5px; line-height: 1.8; color: rgba(255, 233, 184, 0.78); max-width: 320px; }

@@ -42,7 +42,7 @@
   var BALANCE_KEY = 'xifeng.balance.v1';
   var STATS_KEY = 'xifeng.stats.v1';
   var GAME_KEY = 'xifeng.game.v1';
-  var BOOK_KEY = 'xifeng.book.v1';
+  var BOOK_KEY = 'xifeng.book.v3';
 
   var el = {
     picker: document.getElementById('picker'),
@@ -57,7 +57,6 @@
     btnNewBook: document.getElementById('btnNewBook'),
     btnTopUp: document.getElementById('btnTopUp'),
     btnRules: document.getElementById('btnRules'),
-    btnReset: document.getElementById('btnReset'),
     hudBalance: document.getElementById('hudBalance'),
     hudWin: document.getElementById('hudWin'),
     hudBookWin: document.getElementById('hudBookWin'),
@@ -74,8 +73,10 @@
     simBooksTimes: document.getElementById('simBooksTimes'),
     simBookQualify: document.getElementById('simBookQualify'),
     simBookRtp: document.getElementById('simBookRtp'),
+    simBookMedian: document.getElementById('simBookMedian'),
+    simBookOver100: document.getElementById('simBookOver100'),
+    simBookMax: document.getElementById('simBookMax'),
     simBookHit: document.getElementById('simBookHit'),
-    simBookAvg: document.getElementById('simBookAvg'),
     myBooks: document.getElementById('myBooks'),
     myBought: document.getElementById('myBought'),
     myCost: document.getElementById('myCost'),
@@ -89,8 +90,10 @@
 
   var state = {
     game: XF.getGame(localStorage.getItem(GAME_KEY) || 'xf10'),
-    book: null,      // 当前一本（见 XF.generateBook）
+    books: {},       // 四个面额各自缓存最后一「本」：{ gameId: book }
+    book: null,      // 当前面额的那一本（= books[game.id]）
     current: null,   // 当前手牌（book.tickets 中的一项；刮开结算后仍保留用于展示）
+    store: null,     // 本的持久化存档：{ seqs:{gameId:n}, books:{gameId:book} }
     balance: 0,
     stats: { bought: 0, cost: 0, win: 0, best: 0, hits: 0, books: 0, bookBest: 0 }
   };
@@ -124,68 +127,112 @@
     localStorage.setItem(STATS_KEY, JSON.stringify(state.stats));
   }
 
-  function saveBook() {
-    if (!state.book) return;
-    localStorage.setItem(BOOK_KEY, JSON.stringify({
-      seq: state.book.no,
-      currentNo: state.current ? state.current.no : null,
-      book: {
-        gameId: state.book.gameId,
-        no: state.book.no,
-        baseNo: state.book.baseNo,
-        price: state.book.price,
-        bookSize: state.book.bookSize,
-        sales: state.book.sales,
-        guarantee: state.book.guarantee,
-        attempts: state.book.attempts,
-        tickets: state.book.tickets.map(function (t) {
-          return {
-            no: t.no, fullNo: t.fullNo, level: t.level, nominal: t.nominal, win: t.win,
-            parts: t.parts, doubles: t.doubles,
-            done: !!t.done, settled: !!t.settled,
-            _revealed: t._revealed || 0,
-            _openCells: (t._openCells || []).slice()
-          };
-        }),
-        opened: state.book.opened,
-        openedWin: state.book.openedWin,
-        done: !!state.book.done
-      }
-    }));
+  /* ---------------- 本（按面额缓存）的存储 ----------------
+     每个面额各自保留最后一「本」，切换票面时直接回到原来那一本（含手牌与已刮进度）。 */
+
+  function loadBookStore() {
+    var raw = null;
+    try { raw = JSON.parse(localStorage.getItem(BOOK_KEY)); } catch (e) { raw = null; }
+    if (!raw || typeof raw !== 'object') raw = {};
+    if (!raw.books || typeof raw.books !== 'object') raw.books = {};
+    if (!raw.seqs || typeof raw.seqs !== 'object') raw.seqs = {};
+    return raw;
   }
 
-  function restoreBook() {
-    try {
-      var raw = JSON.parse(localStorage.getItem(BOOK_KEY));
-      if (!raw || !raw.book) return null;
-      var b = raw.book;
-      if (!b || b.gameId !== state.game.id) return null;
-      b.tickets.forEach(function (t) {
-        t.done = !!t.done;
-        t.settled = !!t.settled;
-        t._revealed = t._revealed || 0;
-        t._openCells = Array.isArray(t._openCells) ? t._openCells : [];
-      });
-      b.total = b.tickets.reduce(function (a, t) { return a + t.win; }, 0);
-      b.qualified = b.total >= b.guarantee * 0.9;
-      b.currentRef = null;
-      if (raw.currentNo != null && !b.done) {
-        var t = b.tickets.find(function (x) { return x.no === raw.currentNo && !x.done; });
-        if (t) b.currentRef = t;
-      }
-      return b;
-    } catch (e) {
-      return null;
+  function serializeBook(b) {
+    return {
+      gameId: b.gameId,
+      no: b.no,
+      baseNo: b.baseNo,
+      price: b.price,
+      bookSize: b.bookSize,
+      sales: b.sales,
+      guarantee: b.guarantee,
+      floor: b.floor,
+      jackpot: !!b.jackpot,
+      attempts: b.attempts,
+      currentNo: b.currentNo == null ? null : b.currentNo,
+      tickets: b.tickets.map(function (t) {
+        return {
+          no: t.no, fullNo: t.fullNo, level: t.level, nominal: t.nominal, win: t.win,
+          // 中奖拆分 + 格位布局（保证刷新页面后票面完全一致）
+          parts: t.parts, zones: t.zones, doubles: t.doubles,
+          pos: t.pos, bpos: t.bpos, prints: t.prints,
+          done: !!t.done, settled: !!t.settled,
+          _revealed: t._revealed || 0,
+          _openCells: (t._openCells || []).slice()
+        };
+      }),
+      opened: b.opened,
+      openedWin: b.openedWin,
+      done: !!b.done
+    };
+  }
+
+  function saveBooks() {
+    XF.games.forEach(function (g) {
+      var b = state.books[g.id];
+      if (b) state.store.books[g.id] = serializeBook(b);
+    });
+    localStorage.setItem(BOOK_KEY, JSON.stringify(state.store));
+  }
+
+  /** 反序列化一本；票种结构变化或格位越界的旧存档直接丢弃 */
+  function deserializeBook(raw, game) {
+    if (!raw || raw.gameId !== game.id) return null;
+    if (raw.bookSize !== game.bookSize) return null;
+    var b = raw;
+    var stale = false;
+    b.tickets.forEach(function (t) {
+      t.done = !!t.done;
+      t.settled = !!t.settled;
+      t._revealed = t._revealed || 0;
+      t._openCells = Array.isArray(t._openCells) ? t._openCells : [];
+      if (t._openCells.some(function (i) { return i >= game.totalChances; })) stale = true;
+    });
+    if (stale) return null;
+    b.total = b.tickets.reduce(function (a, t) { return a + t.win; }, 0);
+    b.floor = b.floor || game.guaranteeLow;
+    b.qualified = b.total >= b.floor;
+    b.currentNo = b.currentNo == null ? null : b.currentNo;
+    return b;
+  }
+
+  /** 取该面额缓存的一本（内存 → 存档 → 新开一本） */
+  function bookOf(game) {
+    var b = state.books[game.id];
+    if (b) return b;
+    b = deserializeBook(state.store.books[game.id], game);
+    if (b) { state.books[game.id] = b; return b; }
+    b = newBookFor(game);
+    state.books[game.id] = b;
+    return b;
+  }
+
+  /** 切换面额：回到该面额缓存的那一本（不重新生成），并持久化全部缓存 */
+  function useGame(game) {
+    state.game = game;
+    state.book = bookOf(game);
+    state.current = null;
+    if (state.book.currentNo != null && !state.book.done) {
+      var t = state.book.tickets.find(function (x) { return x.no === state.book.currentNo && !x.done; });
+      if (t) state.current = t;
     }
+    saveBooks();
   }
 
-  /* ---------------- 本（一叠）与手牌状态 ---------------- */
+  function newBookFor(game) {
+    var no = (state.store.seqs[game.id] || 0) + 1;
+    state.store.seqs[game.id] = no;
+    var b = XF.generateBook(game.id, no);
+    b.currentNo = null;
+    return b;
+  }
 
-  function bookSeq() {
-    try {
-      var raw = JSON.parse(localStorage.getItem(BOOK_KEY));
-      return (raw && raw.seq) ? raw.seq : 0;
-    } catch (e) { return 0; }
+  /** 手牌归属同步到本记录（用于跨面额保留手牌） */
+  function setHand(t) {
+    state.current = t || null;
+    if (state.book) state.book.currentNo = t ? t.no : null;
   }
 
   /** 可抽取的票（未刮开、非手牌、非 exclude） */
@@ -224,12 +271,13 @@
     return state.book.tickets.filter(function (t) { return !t.done; }).length;
   }
 
-  /** 开启一本新书：不自动发牌（空手空态），由玩家付费抽取 */
+  /** 开启一本新书（仅当前面额）：不自动发牌（空手空态），由玩家付费抽取 */
   function openNewBook() {
-    var no = bookSeq() + 1;
-    state.book = XF.generateBook(state.game.id, no);
-    state.current = null;
-    saveBook();
+    var b = newBookFor(state.game);
+    state.books[state.game.id] = b;
+    state.book = b;
+    setHand(null);
+    saveBooks();
     syncUI();
   }
 
@@ -256,11 +304,11 @@
       state.stats.bought += 1;
       state.stats.cost += g.price;
     }
-    state.current = t;
+    setHand(t);
     t._revealed = 0;
     t._openCells = [];
     saveState();
-    saveBook();
+    saveBooks();
     syncUI();
     dealAnimation();
     return true;
@@ -285,10 +333,10 @@
     if (!hasLiveHand() || !target || target.done || target.settled) return;
     if (handOpenCount() > 0) { showDiscardModal(); return; } // 防御：已刮部分走放弃
     if (target === cur) return;
-    state.current = target;
+    setHand(target);
     target._revealed = 0;
     target._openCells = [];
-    saveBook();
+    saveBooks();
     syncUI();
     dealAnimation();
   }
@@ -313,7 +361,7 @@
       if (state.book.openedWin > state.stats.bookBest) state.stats.bookBest = state.book.openedWin;
     }
     saveState();
-    saveBook();
+    saveBooks();
     return amt;
   }
 
@@ -333,7 +381,7 @@
     var t = state.current;
     if (!hasLiveHand()) return;
     var amt = creditTicket(t);
-    state.current = null;
+    setHand(null);
     syncUI();
     showDiscardResult(t, amt, !!state.book.done);
   }
@@ -463,12 +511,11 @@
     );
   }
 
-  /** 执行换一本：手牌若有已刮格子先结算，然后开新本（空手） */
+  /** 执行换一本：手牌若有已刮格子先结算，然后开新本（仅当前面额，空手） */
   function doNewBook() {
     if (hasLiveHand() && handOpenCount() > 0) {
       creditTicket(state.current); // 部分结算入账
     }
-    state.current = null;
     openNewBook();
   }
 
@@ -514,15 +561,15 @@
       div.innerHTML =
         '<div class="tcard-flower">囍</div>' +
         '<div class="tcard-price">¥' + g.price + '</div>' +
-        '<div class="tcard-sub">' + g.bookSize + ' 张/本 · ' + g.chances + ' 次机会</div>' +
+        '<div class="tcard-sub">' + g.bookSize + ' 张/本 · ' + g.totalChances + ' 次机会</div>' +
         '<div class="tcard-top">一本 ¥' + g.sales + '</div>';
       div.addEventListener('click', function () {
         if (state.game.id === g.id) return;
-        state.game = g;
+        useGame(g); // 切到该面额缓存的那一本（不重新生成）
         localStorage.setItem(GAME_KEY, g.id);
         renderPicker();
         renderPrizeTable();
-        openNewBook(); // 空手空态，等玩家付费抽取
+        syncUI();
       });
       el.picker.appendChild(div);
     });
@@ -594,7 +641,7 @@
   /** 点击架上某张票：抽取（空手）/ 换票（手牌未刮）/ 放弃确认（手牌已刮） */
   function rackSlotClick(i) {
     var b = state.book;
-    if (!b) { openNewBook(); return; }
+    if (!b) { state.book = bookOf(state.game); syncUI(); return; }
     var t = b.tickets[i];
     if (!t || t.done || t.settled) return;    // 已结算槽不可点
     if (t === state.current) return;           // 手中这张（已在下方票面）
@@ -628,6 +675,7 @@
         '<span>已刮 <b>' + b.opened + ' / ' + b.bookSize + '</b> 张</span>' +
         '<span>剩余 <b>' + Math.max(0, bookLeftCount()) + '</b> 张</span>' +
         '<span>本累计中奖 <b>¥' + XF.money(b.openedWin) + '</b></span>' +
+        '<span>整本返奖 <b>≥' + Math.round(XF.BOOK_RTP_FLOOR * 100) + '%</b>（平均约 ' + Math.round((XF.BOOK_RTP_FLOOR + XF.BOOK_RTP_CEIL) / 2 * 100) + '%）</span>' +
       '</div>';
   }
 
@@ -648,23 +696,23 @@
     var noBook = !state.book;
     var doneBook = state.book && state.book.done;
     var poor = state.balance < g.price;
-    var mark, title, tip;
+    var title, tip;
     if (noBook) {
-      mark = '本'; title = '等待开本'; tip = '请先「换一本」开启一本新的奖券。';
+      title = '等待开本'; tip = '请先「换一本」开启一本新的奖券。';
     } else if (doneBook) {
-      mark = '本'; title = '这一本已经刮完';
+      title = '这一本已经刮完';
       tip = '累计中奖 ¥' + XF.money(state.book.openedWin) + ' 已计入战绩。点「换一本」开一本新的，再从上方票架点一张抽取。';
     } else if (poor) {
-      mark = '喜'; title = '体验金不足';
+      title = '体验金不足';
       tip = '抽取一张 ¥' + g.price + ' 元奖券需要体验金 ¥' + g.price + '。点击「领取体验金」补足 ¥200 后，再点票架中的一张抽取。';
     } else {
-      mark = '本'; title = '手中还没有奖券';
+      title = '手中还没有奖券';
       tip = '点击上方<b>票架</b>中的一张或「抽一张」付费抽取（¥' + g.price + '/张）。' +
         '抽取后刮开玩法区：刮出「喜」得对应奖金，刮出「囍」得两倍。本内还剩 ' + bookLeftCount() + ' 张。';
     }
+    // 空占位：金色描边 + 玩法说明（不再使用黄色填充与「本」字占位）
     return '<div class="tk tk-empty">' +
-      '<div class="tk-empty-mark">' + mark + '</div>' +
-      '<p>' + title + '</p>' +
+      '<p class="tk-empty-title">' + title + '</p>' +
       '<p class="tk-empty-tip">' + tip + '</p>' +
     '</div>';
   }
@@ -689,23 +737,30 @@
     var _pi = 0;
     function nextIcon() { var ic = _pool[_pi % _pool.length]; _pi++; return ic; }
 
-    var cellsHtml = cells.map(function (c, i) {
+    function cellHtml(c, i) {
       var cls = 'cell' + (c.type === 'xi' ? ' is-xi' : c.type === 'shuang' ? ' is-shuang' : '');
+      if (c.bonus) cls += ' is-bonus';
       if (openMap[i]) {
         cls += ' is-open' + (c.type !== 'none' ? ' is-hit' : '');
       }
-      var sym = c.type === 'shuang' ? '囍' : c.type === 'xi' ? '喜' : '';
-      // 面值显示“下方印制金额”print；「囷」的印制值为中奖金额的一半（兑奖按两倍）
-      var faceInner = sym
-        ? '<span class="cell-sym">' + sym + '</span>' +
-          '<span class="cell-amt-in">¥' + XF.money(c.print) + '</span>' +
-          '<span class="cell-pinyin-in">' + XF.numToPinyin(c.print) + '</span>'
-        : (function () {
-            var ic = nextIcon();
-            return '<svg class="cell-icon" viewBox="0 0 32 32">' + (ic.html || ('<path d="' + ic.path + '"/>')) + '</svg>';
-          })() +
+      var faceInner;
+      if (c.bonus) {
+        // 好运区：未刮前为 5 个「喜」（由覆盖膜绘制）；刮开后——中奖即显示金额，未中奖显示祝福文字
+        faceInner = c.print > 0
+          ? '<span class="cell-amt-in">¥' + XF.money(c.print) + '</span>' +
+            '<span class="cell-pinyin-in">' + XF.numToPinyin(c.print) + '</span>'
+          : '<span class="cell-sym is-label">' + c.label + '</span>';
+      } else if (c.type === 'none') {
+        var ic = nextIcon();
+        faceInner = '<svg class="cell-icon" viewBox="0 0 32 32">' + (ic.html || ('<path d="' + ic.path + '"/>')) + '</svg>' +
           '<span class="cell-amt-in">¥' + XF.money(c.print) + '</span>' +
           '<span class="cell-pinyin-in">' + XF.numToPinyin(c.print) + '</span>';
+      } else {
+        // 面值显示“下方印制金额”print；「囷」的印制值为中奖金额的一半（兑奖按两倍）
+        faceInner = '<span class="cell-sym">' + (c.type === 'shuang' ? '囍' : '喜') + '</span>' +
+          '<span class="cell-amt-in">¥' + XF.money(c.print) + '</span>' +
+          '<span class="cell-pinyin-in">' + XF.numToPinyin(c.print) + '</span>';
+      }
       return '<div class="' + cls + '" data-i="' + i + '">' +
         '<div class="cell-circle">' +
           '<div class="cell-face">' + faceInner + '</div>' +
@@ -714,7 +769,23 @@
           ? '<div class="cell-win">中 ¥' + XF.money(c.amount) + '</div>'
           : '<div class="cell-win is-zero">&nbsp;</div>') +
       '</div>';
-    }).join('');
+    }
+
+    var dense = g.rows >= 6 ? ' is-dense' : '';
+    var mainCellsHtml = cells.slice(0, g.chances).map(cellHtml).join('');
+    var bonusZoneHtml = '';
+    if (g.bonus) {
+      var bonusCellsHtml = cells.slice(g.chances).map(function (c, i) {
+        return cellHtml(c, g.chances + i); // 好运区格位紧接玩法区编号
+      }).join('');
+      bonusZoneHtml =
+        '<div class="tk-zonetip">▼ 好运区 · ' + g.bonus.labels.join(' ') + '</div>' +
+        '<div class="tk-play is-bonus">' +
+          '<div class="grid grid-bonus" style="grid-template-columns:repeat(' + g.bonus.cols + ',1fr)">' +
+            bonusCellsHtml + '<canvas class="ticket-cover"></canvas>' +
+          '</div>' +
+        '</div>';
+    }
 
     var html =
       '<div class="tk">' +
@@ -729,14 +800,17 @@
         '<h2 class="tk-title">囍相逢</h2>' +
         '<div class="tk-banner"><span class="tk-banner-text">' + g.banner + '</span></div>' +
         '<div class="tk-jackpot">最高奖金<b>' + (g.prizes[0] >= 10000 ? (g.prizes[0] / 10000) + '万元' : g.prizes[0] + '元') + '</b></div>' +
-        '<div class="tk-zonetip">▼ 玩法区</div>' +
+        bonusZoneHtml +
+        '<div class="tk-zonetip">▼ 玩法区' + (g.bonus ? ' · ' + g.chances + ' 次机会' : '') + '</div>' +
         '<div class="tk-play">' +
           '<div class="tk-couplet">' + g.coupletL + '</div>' +
-          '<div class="grid' + (g.cols >= 8 ? ' is-dense' : '') + '" style="grid-template-columns:repeat(' + g.cols + ',1fr)">' + cellsHtml + '<canvas class="ticket-cover"></canvas>' + '</div>' +
+          '<div class="grid grid-main' + dense + '" style="grid-template-columns:repeat(' + g.cols + ',1fr)' + gridWidthStyle(g.cols, g.rows) + '">' + mainCellsHtml + '<canvas class="ticket-cover"></canvas>' + '</div>' +
           '<div class="tk-couplet">' + g.coupletR + '</div>' +
         '</div>' +
-        '<p class="tk-rule">刮开覆盖膜，如果刮出「<em>喜</em>」图符，即可获得该图符下方所对应的奖金；如果刮出「<em>囍</em>」图符，即可获得该图符下方所对应奖金的<em>两倍</em>。中奖奖金兼中兼得。</p>' +
-        '<div class="tk-chances">' + g.chances + '次中奖机会</div>' +
+        '<p class="tk-rule">刮开覆盖膜，如果刮出「<em>喜</em>」图符，即可获得该图符下方所对应的奖金；如果刮出「<em>囍</em>」图符，即可获得该图符下方所对应奖金的<em>两倍</em>。中奖奖金兼中兼得。' +
+          (g.bonus ? '好运区（' + g.bonus.labels.join('、') + '）刮出奖金金额即中奖，与玩法区奖金兼中兼得。' : '') +
+        '</p>' +
+        '<div class="tk-chances">' + g.totalChances + '次中奖机会</div>' +
         '<div class="tk-banner is-footer"><span class="tk-banner-text">' + g.footerBanner + '</span></div>' +
         '<div class="tk-bottom">' +
           '<span class="tk-safe">保安区刮开无效</span>' +
@@ -747,15 +821,29 @@
 
     el.ticket.innerHTML = html;
 
+    // 每个玩法区各挂一张覆盖膜（主玩法区 + 好运区）
     state.cards = [];
-    var coverCanvas = el.ticket.querySelector('.ticket-cover');
-    var cellsNodes = el.ticket.querySelectorAll('.cell');
-    var cellsInfo = [];
-    Array.prototype.forEach.call(cellsNodes, function (node, i) {
-      if (openMap[i]) return; // 已刮开的格不再注册，避免重复结算
-      cellsInfo.push({ node: node, onReveal: function () { onCellOpen(node, i); } });
-    });
-    state.cards = [new window.ScratchCard(coverCanvas, { cells: cellsInfo })];
+    var covers = el.ticket.querySelectorAll('.ticket-cover');
+    bindZone(covers[0], '.grid-main', 0);
+    if (covers[1]) bindZone(covers[1], '.grid-bonus', g.chances);
+
+    function bindZone(canvas, sel, offset) {
+      if (!canvas) return;
+      var info = [];
+      Array.prototype.forEach.call(el.ticket.querySelectorAll(sel + ' .cell'), function (node, i) {
+        var idx = offset + i;
+        if (openMap[idx]) return; // 已刮开的格不再注册，避免重复结算
+        info.push({ node: node, onReveal: function () { onCellOpen(node, idx); } });
+      });
+      state.cards.push(new window.ScratchCard(canvas, { cells: info }));
+    }
+  }
+
+  /** 行数较多的玩法区收窄格宽，避免票面被拉得过长（列数固定为 5） */
+  function gridWidthStyle(cols, rows) {
+    if (rows <= 2) return '';
+    var size = rows >= 9 ? 44 : (rows >= 6 ? 48 : 54);
+    return ';max-width:' + (cols * size + (cols - 1) * 4) + 'px;margin-left:auto;margin-right:auto';
   }
 
   function onCellOpen(node, i) {
@@ -887,8 +975,11 @@
         '<tbody>' + rows + '</tbody>' +
       '</table>' +
       '<p class="note">' +
-        '整本玩法：一本 ' + g.bookSize + ' 张（总价 ¥' + g.sales + '），每次点上方票架中的一张付费抽取，' +
-        '本实际中奖按整本奖池比例配额（可在「概率验证」中查看整本口径模拟）。<br>' +
+        '整本玩法：一本 ' + g.bookSize + ' 张（总价 ¥' + g.sales + '），每次点上方票架中的一张付费抽取。' +
+        '「本」不改变单张概率设定：每本返奖不低于 <b>50%</b>（保底），整体平均约 <b>65%</b>，' +
+        '可在「概率验证」中查看整本口径模拟。<br>' +
+        '中奖机会 ' + g.totalChances + ' 次（' + g.rows + ' 行 ' + g.cols + ' 列' +
+        (g.bonus ? ' + 好运区 1 行 ' + g.bonus.cols + ' 列' : '') + '），最高奖金 ¥' + XF.money(g.prizes[0]) + '。<br>' +
         '奖级表为单张官方口径参考：中奖面 ' + (g.winRate * 100).toFixed(2) + '%、返奖率 ' + (g.rtp * 100).toFixed(0) +
         '%，各奖级中奖张数按每百万张设奖池反推。50 元档为演示构造设奖。' +
       '</p>';
@@ -904,8 +995,10 @@
       var r = XF.simulateBooks(state.game.id, times);
       el.simBookQualify.textContent = (r.qualifyRate * 100).toFixed(1) + '%';
       el.simBookRtp.textContent = (r.avgRtp * 100).toFixed(1) + '%';
+      el.simBookMedian.textContent = (r.medianRtp * 100).toFixed(1) + '%';
+      el.simBookOver100.textContent = (r.over100Rate * 100).toFixed(2) + '%';
+      el.simBookMax.textContent = (r.maxRtp * 100).toFixed(0) + '%';
       el.simBookHit.textContent = (r.avgHitRate * 100).toFixed(1) + '%';
-      el.simBookAvg.textContent = XF.money(Math.round(r.avgBookWin));
       el.btnSimBooks.disabled = false;
       el.btnSimBooks.textContent = '开始模拟';
     }, 30);
@@ -947,11 +1040,15 @@
         '<p>一、刮开覆盖膜，如果刮出「<b>喜</b>」图符，即可获得该图符下方所对应的奖金；' +
         '如果刮出「<b>囍</b>」图符，即可获得该图符下方所对应奖金的<b>两倍</b>；奖金兼中兼得。</p>' +
         '<p>二、<b>先付款，后取票</b>：体验金不足时无法抽奖。点击上方<b>票架</b>中的一张（或「抽一张」随机取一张）付费抽取，即可开始刮奖。</p>' +
-        '<p>三、以「<b>本</b>」为单位：10 元票 50 张/本（总价 500 元）；20 元票 30 张/本；30 元票 20 张/本；50 元票 12 张/本（总价均 600 元）。' +
-        '每本实际中奖按整本奖池随机配额，单本中奖情况不对外公布。</p>' +
-        '<p>四、<b>只有未刮开的奖券可以免费更换</b>：点击票架中另一张未刮的票，手中这张即放回架上（不重复扣费）；' +
+        '<p>三、以「<b>本</b>」为单位：10 元票 50 张/本（¥500）；20 元票 30 张/本（¥600）；' +
+        '30 元票 20 张/本（¥600）；50 元票 20 张/本（¥1000）。' +
+        '每本按整本奖池随机配额，<b>每本返奖不低于 50%（保底）、整体平均约 65%</b>；单本配额不对外公布。</p>' +
+        '<p>四、中奖机会：10 元票 10 次（2 行 5 列）；20 元票 25 次（5 行 5 列）；30 元票 40 次（8 行 5 列）；' +
+        '50 元票 55 次（玩法区 10 行 5 列 + 好运区 1 行 5 列）。50 元票顶部「<b>好运区</b>」五个单元<b>未刮开前均为「喜」字膜</b>，刮开后未中奖单元显示' +
+        '「吉祥 / 快乐 / 如意 / 幸运 / 平安」中文字，<b>刮出奖金金额即中奖</b>，与玩法区奖金兼中兼得。</p>' +
+        '<p>五、<b>只有未刮开的奖券可以免费更换</b>：点击票架中另一张未刮的票，手中这张即放回架上（不重复扣费）；' +
         '已刮开部分想换新票，需先「放弃」——已刮开格子的奖金立即结算，<b>未刮开区域不再兑奖</b>。</p>' +
-        '<p>五、「换一本」将作废当前本剩余奖券并拆开一本新的；本页<b>不涉及真实资金、不可兑奖</b>，公益金 20% 为模拟示意。</p>' +
+        '<p>六、「换一本」将作废当前本剩余奖券并拆开一本新的；本页<b>不涉及真实资金、不可兑奖</b>，公益金 20% 为模拟示意。</p>' +
       '</div>' +
       '<div class="modal-actions">' +
         '<button class="primary-btn" data-act="close" type="button">开始刮奖</button>' +
@@ -1008,36 +1105,23 @@
     boostTap++;
     if (boostTap >= 6) {
       boostTap = 0;
-      XF._boost = true;
+      XF._boost = !XF._boost;
       openModal(
-        '<div class="modal-badge" style="color:#9a8b7a">🎯</div>' +
-        '<h3 class="modal-title">中奖概率已提高</h3>' +
-        '<p class="modal-desc">已开启概率提升模式：<b>一等奖、二等奖</b>中奖概率显著提高！<br>点击「重置」可恢复正常中奖概率。</p>' +
-        '<div class="modal-actions"><button class="primary-btn" data-act="close" type="button">知道了</button></div>'
+        XF._boost
+          ? '<div class="modal-badge" style="color:#9a8b7a">🎯</div>' +
+            '<h3 class="modal-title">中奖概率已提高</h3>' +
+            '<p class="modal-desc">已开启概率提升模式：<b>一等奖、二等奖</b>中奖概率显著提高！<br>再次连点 6 次说明文字即可恢复。</p>' +
+            '<div class="modal-actions"><button class="primary-btn" data-act="close" type="button">知道了</button></div>'
+          : '<div class="modal-badge" style="color:#9a8b7a">ℹ️</div>' +
+            '<h3 class="modal-title">已恢复正常概率</h3>' +
+            '<p class="modal-desc">中奖概率已恢复为官方默认值。</p>' +
+            '<div class="modal-actions"><button class="primary-btn" data-act="close" type="button">好的</button></div>'
       );
     }
   });
 
   el.btnSim.addEventListener('click', runSim);
   el.btnSimBooks.addEventListener('click', runSimBooks);
-
-  el.btnReset.addEventListener('click', function () {
-    var wasBoost = !!XF._boost;
-    state.balance = 200;
-    state.stats = { bought: 0, cost: 0, win: 0, best: 0, hits: 0, books: 0, bookBest: 0 };
-    XF._boost = false;
-    boostTap = 0;
-    saveState();
-    openNewBook();
-    if (wasBoost) {
-      openModal(
-        '<div class="modal-badge" style="color:#9a8b7a">ℹ️</div>' +
-        '<h3 class="modal-title">已恢复正常概率</h3>' +
-        '<p class="modal-desc">中奖概率已恢复为官方默认值，并重新开启了一本（等待抽取）。</p>' +
-        '<div class="modal-actions"><button class="primary-btn" data-act="close" type="button">好的</button></div>'
-      );
-    }
-  });
 
   el.btnClearStats.addEventListener('click', function () {
     state.stats = { bought: 0, cost: 0, win: 0, best: 0, hits: 0, books: 0, bookBest: 0 };
@@ -1064,15 +1148,10 @@
 
   loadState();
   XF._boost = false;
+  state.store = loadBookStore();
   renderPicker();
   renderPrizeTable();
-
-  var saved = restoreBook();
-  if (saved) {
-    state.book = saved;
-    state.current = saved.currentRef || null; // 恢复手牌（半刮格照常显示）
-  } else {
-    openNewBook();
-  }
+  useGame(state.game); // 载入当前面额缓存的那一本（无则新开，绝不重生成其它面额）
+  saveBooks();
   syncUI();
 })();

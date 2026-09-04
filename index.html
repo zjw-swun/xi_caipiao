@@ -24,7 +24,6 @@
     </div>
     <div class="topbar-actions">
       <button class="ghost-btn" id="btnRules" type="button">玩法规则</button>
-      <button class="ghost-btn" id="btnReset" type="button">重置</button>
     </div>
   </header>
 
@@ -90,12 +89,14 @@
           <button class="plain-btn" id="btnSimBooks" type="button" style="color:#7d1a12;background:#ffe9b3;border-color:#e5c266">开始模拟</button>
         </div>
         <div class="sim-out">
-          <div class="sim-box"><b id="simBookQualify">—</b><span>整本合格率（奖池达标比例）</span></div>
-          <div class="sim-box"><b id="simBookAvg">—</b><span>平均一本中奖额（元）</span></div>
-          <div class="sim-box"><b id="simBookRtp">—</b><span>平均一本返奖率（实付口径）</span></div>
+          <div class="sim-box"><b id="simBookQualify">—</b><span>整本保底达标率（每本 ≥ 50%）</span></div>
+          <div class="sim-box"><b id="simBookRtp">—</b><span>平均一本返奖率（理论 65%）</span></div>
+          <div class="sim-box"><b id="simBookMedian">—</b><span>中位数一本返奖率</span></div>
+          <div class="sim-box"><b id="simBookOver100">—</b><span>返奖超 100% 的本占比</span></div>
+          <div class="sim-box"><b id="simBookMax">—</b><span>最高单本返奖率</span></div>
           <div class="sim-box"><b id="simBookHit">—</b><span>单张中奖面（有奖张占比）</span></div>
-        </div>
-        <p class="note">整本玩法口径：每本实付奖金按随机奖池配额生成（平均约为一本总价的四成，允许高低浮动，并始终不低于整本下限）；中奖张数由现有奖级结构自然推出。单本具体配额不对外公布。</p>
+          </div>
+          <p class="note">整本玩法口径：每本返奖率 <b>恒 ≥ 50% 保底</b>，大基数下整体均值收敛到 <b>65%</b>（卖家约留存 35% 收益）；分布带右尾，约 5% 的本返奖超过 100%（个别买家整本赚钱），并以官方头奖中奖面让极稀有的本开出满额大奖。单本具体配额不对外公布。</p>
       </div>
 
       <div class="sim-sec">
@@ -133,8 +134,8 @@
   </section>
 
   <footer class="foot">
-    10 / 20 / 30 元奖级参考公开票样资料；50 元票为演示构造数据（官方 50 元双玩法区未收录）。中奖面 31.91%、返奖率 65% 为公开口径。<br>
-    整本玩法为演示设定：一本固定张数，实际中奖按整本奖池配额分配（每本配额随机，不对玩家公开）。<br>
+    10 / 20 / 30 元奖级参考公开票样资料；50 元票奖级为演示构造数据，其双玩法区（玩法区 10 行 5 列 + 好运区 1 行 5 列）规则为演示设定。中奖面 31.91%、返奖率 65% 为公开口径。<br>
+    整本玩法为演示设定：一本固定张数，实际中奖按整本奖池配额分配（每本返奖不低于 50%，整体平均约 65%；单本配额随机，不对玩家公开）。<br>
     本页为技术演示与娱乐用途，与任何彩票发行机构无关，不销售、不兑付任何彩票。
   </footer>
 </main>
