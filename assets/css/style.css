@@ -933,6 +933,15 @@ table.prize tr.is-top td.amt { color: #b06a00; }
   cursor: pointer;
 }
 
+.prize-verify {
+  text-align: right;
+  margin-top: 6px;
+}
+
+.prize-verify .link-btn {
+  margin-top: 0;
+}
+
 /* ---------- 弹窗 ---------- */
 .modal {
   position: fixed;

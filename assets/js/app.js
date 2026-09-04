@@ -386,6 +386,57 @@
     showDiscardResult(t, amt, !!state.book.done);
   }
 
+  /** 作废当前手牌：结算已刮开的奖金（若有），标记完成；已付体验金不返还 */
+  function voidCurrentHand() {
+    var t = state.current;
+    if (!t || !hasLiveHand()) return;
+    creditTicket(t); // 结算已刮奖金（若有）；不返还已付体验金
+    setHand(null);
+    saveBooks();
+  }
+
+  var pendingDrawTarget = null; // null = 随机抽一张
+  var pendingSwitchGame = null;
+
+  /** 切换/抽取前确认：作废当前手牌（不返还体验金） */
+  function confirmVoidAndDraw(t) {
+    pendingDrawTarget = (t === undefined) ? null : t;
+    openModal(
+      '<div class="modal-badge" style="color:#9a8b7a">弃</div>' +
+      '<h3 class="modal-title">切换奖券将作废当前手中这张</h3>' +
+      '<p class="modal-desc">当前手中奖券（已付体验金 ¥' + state.game.price + '，<b>不返还</b>）将作废。' +
+        (pendingDrawTarget ? ('确定换到第 ' + pendingDrawTarget.no + ' 张') : '确定抽一张新的') +
+        '（¥' + state.game.price + '）？</p>' +
+      '<div class="modal-actions">' +
+        '<button class="plain-btn" data-act="cancel" type="button" style="color:#7d1a12;background:#ffe9b3;border-color:#e5c266">再想想</button>' +
+        '<button class="primary-btn" data-act="voidConfirm" type="button">作废并换这张</button>' +
+      '</div>'
+    );
+  }
+
+  function doSwitchGame(g) {
+    useGame(g);
+    localStorage.setItem(GAME_KEY, g.id);
+    renderPicker();
+    renderPrizeTable();
+    syncUI();
+  }
+
+  /** 切换面额前确认：作废当前手牌（不返还体验金） */
+  function confirmVoidAndSwitch(g) {
+    pendingSwitchGame = g;
+    openModal(
+      '<div class="modal-badge" style="color:#9a8b7a">弃</div>' +
+      '<h3 class="modal-title">切换面额将作废手中奖券</h3>' +
+      '<p class="modal-desc">当前面额手中奖券（已付体验金 ¥' + state.game.price + '，<b>不返还</b>）将作废。' +
+        '确定切换到「¥' + g.price + '」面额？</p>' +
+      '<div class="modal-actions">' +
+        '<button class="plain-btn" data-act="cancel" type="button" style="color:#7d1a12;background:#ffe9b3;border-color:#e5c266">再想想</button>' +
+        '<button class="primary-btn" data-act="voidSwitch" type="button">作废并切换</button>' +
+      '</div>'
+    );
+  }
+
   /* ---------------- 结算弹窗 ---------------- */
 
   function showTicketResult(t, finished, amt) {
@@ -541,6 +592,21 @@
     if (act === 'again') { closeModal(); drawNext(); return; }
     if (act === 'discard') { closeModal(); discardHand(); return; }
     if (act === 'doNewBook') { closeModal(); doNewBook(); return; }
+    if (act === 'cancel') { closeModal(); pendingDrawTarget = null; pendingSwitchGame = null; return; }
+    if (act === 'voidConfirm') {
+      closeModal();
+      var tgt = pendingDrawTarget; pendingDrawTarget = null;
+      voidCurrentHand();
+      drawTicket(tgt, true);
+      return;
+    }
+    if (act === 'voidSwitch') {
+      closeModal();
+      var sg = pendingSwitchGame; pendingSwitchGame = null;
+      voidCurrentHand();
+      doSwitchGame(sg);
+      return;
+    }
   });
 
   /* ---------------- 体验金 ---------------- */
@@ -565,11 +631,8 @@
         '<div class="tcard-top">一本 ¥' + g.sales + '</div>';
       div.addEventListener('click', function () {
         if (state.game.id === g.id) return;
-        useGame(g); // 切到该面额缓存的那一本（不重新生成）
-        localStorage.setItem(GAME_KEY, g.id);
-        renderPicker();
-        renderPrizeTable();
-        syncUI();
+        if (hasLiveHand()) { confirmVoidAndSwitch(g); return; }
+        doSwitchGame(g);
       });
       el.picker.appendChild(div);
     });
@@ -584,8 +647,8 @@
     if (!b) return '先点「换一本」开启一本';
     if (hasLiveHand()) {
       return handOpenCount() > 0
-        ? '本张已刮开部分：换票需先「放弃」（未刮开区域不兑奖）'
-        : '手中有第 ' + state.current.no + ' 张（未刮）· 点架上其他张可免费换';
+        ? '本张已刮开部分：换票将作废当前（未刮开区域不兑奖）'
+        : '手中有第 ' + state.current.no + ' 张（未刮）· 点其他张/换面额将作废当前并更换';
     }
     if (b.done) return '这本已全部刮完 · 点「换一本」再开一本';
     if (state.balance < g.price) return '体验金不足 · 先领取再抽取';
@@ -646,8 +709,7 @@
     if (!t || t.done || t.settled) return;    // 已结算槽不可点
     if (t === state.current) return;           // 手中这张（已在下方票面）
     if (hasLiveHand()) {
-      if (handOpenCount() > 0) { showDiscardModal(); return; } // 已刮部分：先放弃
-      swapTo(t);                                                // 未刮：免费换到这张
+      confirmVoidAndDraw(t); // 任意场景切换奖券都要先作废当前手牌（不返还体验金）
       return;
     }
     if (b.done) { showBookDoneModal(); return; }
@@ -675,7 +737,6 @@
         '<span>已刮 <b>' + b.opened + ' / ' + b.bookSize + '</b> 张</span>' +
         '<span>剩余 <b>' + Math.max(0, bookLeftCount()) + '</b> 张</span>' +
         '<span>本累计中奖 <b>¥' + XF.money(b.openedWin) + '</b></span>' +
-        '<span>整本返奖 <b>≥' + Math.round(XF.BOOK_RTP_FLOOR * 100) + '%</b>（平均约 ' + Math.round((XF.BOOK_RTP_FLOOR + XF.BOOK_RTP_CEIL) / 2 * 100) + '%）</span>' +
       '</div>';
   }
 
@@ -821,11 +882,14 @@
 
     el.ticket.innerHTML = html;
 
-    // 每个玩法区各挂一张覆盖膜（主玩法区 + 好运区）
+    // 每个玩法区各挂一张覆盖膜（主玩法区 + 好运区）。
+    // 注意：好运区 HTML 在主玩法区之前，故 querySelectorAll 顺序为 [好运区画布, 主区画布]，
+    // 不能依赖下标——直接取各自网格内部的画布，避免绑错导致主区覆盖膜丢失。
     state.cards = [];
-    var covers = el.ticket.querySelectorAll('.ticket-cover');
-    bindZone(covers[0], '.grid-main', 0);
-    if (covers[1]) bindZone(covers[1], '.grid-bonus', g.chances);
+    var gridMain = el.ticket.querySelector('.grid-main');
+    var gridBonus = el.ticket.querySelector('.grid-bonus');
+    bindZone(gridMain ? gridMain.querySelector('.ticket-cover') : null, '.grid-main', 0);
+    if (gridBonus) bindZone(gridBonus.querySelector('.ticket-cover'), '.grid-bonus', g.chances);
 
     function bindZone(canvas, sel, offset) {
       if (!canvas) return;
@@ -843,7 +907,11 @@
   function gridWidthStyle(cols, rows) {
     if (rows <= 2) return '';
     var size = rows >= 9 ? 44 : (rows >= 6 ? 48 : 54);
-    return ';max-width:' + (cols * size + (cols - 1) * 4) + 'px;margin-left:auto;margin-right:auto';
+    var w = cols * size + (cols - 1) * 4;
+    // 用确定宽度而非 max-width：max-width + margin:auto 会让网格项按内容收缩，
+    // 而 aspect-ratio 格子的 min-content 约 0，导致整网格塌成 0 宽、格子 0 尺寸，
+    // 进而刮开画布量到半径≈0 触发 IndexSizeError。min(Wpx,100%) 既限宽又居中且不塌缩。
+    return ';width:min(' + w + 'px,100%);margin-left:auto;margin-right:auto';
   }
 
   function onCellOpen(node, i) {
@@ -976,13 +1044,20 @@
       '</table>' +
       '<p class="note">' +
         '整本玩法：一本 ' + g.bookSize + ' 张（总价 ¥' + g.sales + '），每次点上方票架中的一张付费抽取。' +
-        '「本」不改变单张概率设定：每本返奖不低于 <b>50%</b>（保底），整体平均约 <b>65%</b>，' +
-        '可在「概率验证」中查看整本口径模拟。<br>' +
         '中奖机会 ' + g.totalChances + ' 次（' + g.rows + ' 行 ' + g.cols + ' 列' +
         (g.bonus ? ' + 好运区 1 行 ' + g.bonus.cols + ' 列' : '') + '），最高奖金 ¥' + XF.money(g.prizes[0]) + '。<br>' +
-        '奖级表为单张官方口径参考：中奖面 ' + (g.winRate * 100).toFixed(2) + '%、返奖率 ' + (g.rtp * 100).toFixed(0) +
-        '%，各奖级中奖张数按每百万张设奖池反推。50 元档为演示构造设奖。' +
-      '</p>';
+        '奖级表为单张官方口径：各奖级中奖张数按每百万张设奖池反推，50 元档为演示构造设奖。' +
+      '</p>' +
+      '<div class="prize-verify">' +
+        '<button class="link-btn" id="btnVerifyToggle" type="button">概率验证 ▸</button>' +
+      '</div>';
+
+    var vbtn = document.getElementById('btnVerifyToggle');
+    if (vbtn) vbtn.addEventListener('click', function () {
+      var willOpen = el.tabSim.hidden;
+      el.tabSim.hidden = !willOpen;
+      vbtn.textContent = willOpen ? '收起验证 ▴' : '概率验证 ▸';
+    });
   }
 
   /* ---------------- 概率验证 ---------------- */
@@ -1041,13 +1116,12 @@
         '如果刮出「<b>囍</b>」图符，即可获得该图符下方所对应奖金的<b>两倍</b>；奖金兼中兼得。</p>' +
         '<p>二、<b>先付款，后取票</b>：体验金不足时无法抽奖。点击上方<b>票架</b>中的一张（或「抽一张」随机取一张）付费抽取，即可开始刮奖。</p>' +
         '<p>三、以「<b>本</b>」为单位：10 元票 50 张/本（¥500）；20 元票 30 张/本（¥600）；' +
-        '30 元票 20 张/本（¥600）；50 元票 20 张/本（¥1000）。' +
-        '每本按整本奖池随机配额，<b>每本返奖不低于 50%（保底）、整体平均约 65%</b>；单本配额不对外公布。</p>' +
+        '30 元票 20 张/本（¥600）；50 元票 20 张/本（¥1000）。每本按整本奖池随机配额，单本具体配额不对外公布。</p>' +
         '<p>四、中奖机会：10 元票 10 次（2 行 5 列）；20 元票 25 次（5 行 5 列）；30 元票 40 次（8 行 5 列）；' +
         '50 元票 55 次（玩法区 10 行 5 列 + 好运区 1 行 5 列）。50 元票顶部「<b>好运区</b>」五个单元<b>未刮开前均为「喜」字膜</b>，刮开后未中奖单元显示' +
         '「吉祥 / 快乐 / 如意 / 幸运 / 平安」中文字，<b>刮出奖金金额即中奖</b>，与玩法区奖金兼中兼得。</p>' +
-        '<p>五、<b>只有未刮开的奖券可以免费更换</b>：点击票架中另一张未刮的票，手中这张即放回架上（不重复扣费）；' +
-        '已刮开部分想换新票，需先「放弃」——已刮开格子的奖金立即结算，<b>未刮开区域不再兑奖</b>。</p>' +
+        '<p>五、<b>切换奖券会作废当前手中这张</b>：无论是点票架中另一张、点「抽一张」还是切换面额，只要手中还有未结算的奖券，都会先提示「作废（已付体验金不返还）」确认后才更换；' +
+        '已刮开格子的奖金会立即结算入账，<b>未刮开区域不再兑奖</b>。</p>' +
         '<p>六、「换一本」将作废当前本剩余奖券并拆开一本新的；本页<b>不涉及真实资金、不可兑奖</b>，公益金 20% 为模拟示意。</p>' +
       '</div>' +
       '<div class="modal-actions">' +
@@ -1059,16 +1133,7 @@
   /* ---------------- 事件绑定 ---------------- */
 
   el.btnBuy.addEventListener('click', function () {
-    if (hasLiveHand()) {
-      openModal(
-        '<div class="modal-badge" style="color:#9a8b7a">喜</div>' +
-        '<h3 class="modal-title">先处理手中这张</h3>' +
-        '<p class="modal-desc">每人同时只能持有一张奖券。可「一键刮开」结算，' +
-        '或点上方票架：未刮开点另一张即免费换，已刮开需先「放弃」再抽取新票。</p>' +
-        '<div class="modal-actions"><button class="primary-btn" data-act="close" type="button">好的</button></div>'
-      );
-      return;
-    }
+    if (hasLiveHand()) { confirmVoidAndDraw(null); return; } // 作废当前并随机抽一张
     drawTicket(null, true);
   });
   el.btnReveal.addEventListener('click', revealAll);
@@ -1135,8 +1200,11 @@
         t.classList.toggle('is-active', t === tab);
       });
       el.tabPrize.hidden = tab.dataset.tab !== 'prize';
-      el.tabSim.hidden = tab.dataset.tab !== 'sim';
       el.tabMine.hidden = tab.dataset.tab !== 'mine';
+      // 切走「奖级与概率」时收起概率验证面板，并把开关文字复位
+      el.tabSim.hidden = true;
+      var vb = document.getElementById('btnVerifyToggle');
+      if (vb) vb.textContent = '概率验证 ▸';
     });
   });
 
