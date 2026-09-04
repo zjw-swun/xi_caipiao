@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>囍相逢 · 趣味刮刮乐（玩法 / 奖级 / 概率演示）</title>
+<meta name="description" content="趣味刮刮乐「囍相逢」玩法演示：刮出「喜」即得对应奖金，刮出「囍」奖金翻倍。本页为纯技术演示，不涉及真实资金、不可兑奖。">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='12' fill='%23b51226'/%3E%3Ctext x='32' y='45' font-size='40' text-anchor='middle' fill='%23ffe9ae' font-family='serif'%3E%E5%9B%8D%3C/text%3E%3C/svg%3E">
+<link rel="stylesheet" href="assets/css/style.css">
+</head>
+<body>
+<main class="app">
+  <div class="disclaimer">
+    ⚠️ 本页面为纯技术演示与娱乐用途，与任何彩票发行机构<b>无任何关联</b>；不涉及真实货币交易，不销售、不兑付任何彩票。所有奖金均为虚拟体验金。请理性娱乐、远离赌博，禁止未成年人参与。
+  </div>
+
+  <header class="topbar">
+    <div class="brand">
+      <div class="brand-mark">囍</div>
+      <div>
+        <h1>囍相逢</h1>
+        <p>趣味刮刮乐 · 玩法 / 奖级 / 概率演示</p>
+      </div>
+    </div>
+    <div class="topbar-actions">
+      <button class="ghost-btn" id="btnRules" type="button">玩法规则</button>
+      <button class="ghost-btn" id="btnReset" type="button">重置</button>
+    </div>
+  </header>
+
+  <div class="section-title">
+    选择票面
+    <span>官方三种面值 · 返奖率 65%</span>
+  </div>
+  <section class="picker" id="picker"></section>
+
+  <section class="stage">
+    <div class="deck" id="deck" title="抽卡池：点「抽一张」从牌堆抽一张票">
+      <span class="deck-card deck-1"></span>
+      <span class="deck-card deck-2"></span>
+      <span class="deck-card deck-3"></span>
+      <span class="deck-label">抽卡池</span>
+    </div>
+
+    <div class="ticket" id="ticket"></div>
+
+    <div class="controls">
+      <button class="primary-btn" id="btnBuy" type="button">抽一张</button>
+      <button class="plain-btn" id="btnReveal" type="button">一键刮开</button>
+      <button class="plain-btn" id="btnNext" type="button">换一张</button>
+      <button class="plain-btn" id="btnTopUp" type="button">领取体验金</button>
+    </div>
+
+    <div class="hud">
+      <div class="hud-item"><b id="hudBalance">0</b><span>体验金（元）</span></div>
+      <div class="hud-item"><b id="hudWin">0</b><span>本张中奖（元）</span></div>
+      <div class="hud-item"><b id="hudBought">0</b><span>累计张数</span></div>
+      <div class="hud-item"><b id="hudRtp">0%</b><span>我的返奖率</span></div>
+    </div>
+
+    <p class="tip">
+      模拟娱乐用途，不涉及任何真实资金，不可兑奖。<br>
+      理性购彩，量力而行，禁止未成年人购买彩票和兑奖。
+    </p>
+  </section>
+
+  <section class="panel">
+    <div class="panel-tabs">
+      <button class="panel-tab is-active" data-tab="prize" type="button">奖级与概率</button>
+      <button class="panel-tab" data-tab="sim" type="button">概率验证</button>
+      <button class="panel-tab" data-tab="mine" type="button">我的战绩</button>
+    </div>
+
+    <div class="panel-body" id="tabPrize"></div>
+
+    <div class="panel-body" id="tabSim" hidden>
+      <div class="sim-row">
+        <span class="note" style="margin:0">模拟张数</span>
+        <select id="simTimes">
+          <option value="10000">1 万张</option>
+          <option value="100000" selected>10 万张</option>
+          <option value="1000000">100 万张</option>
+        </select>
+        <button class="plain-btn" id="btnSim" type="button" style="color:#7d1a12;background:#ffe9b3;border-color:#e5c266">开始模拟</button>
+      </div>
+      <div class="sim-out">
+        <div class="sim-box"><b id="simHit">—</b><span>实际中奖面（理论 31.91%）</span></div>
+        <div class="sim-box"><b id="simRtp">—</b><span>实际返奖率（理论 65%）</span></div>
+      </div>
+      <div id="simTable"></div>
+      <p class="note">模拟直接按官方中奖面与奖级权重抽样，不含展示用的拆分逻辑，因此结果应稳定收敛于官方公布的中奖面 31.91% 与返奖率 65%。</p>
+    </div>
+
+    <div class="panel-body" id="tabMine" hidden>
+      <div class="my-stats">
+        <div class="stat-box"><b id="myBought">0</b><span>购买张数</span></div>
+        <div class="stat-box"><b id="myCost">0</b><span>投入（元）</span></div>
+        <div class="stat-box"><b id="myWin">0</b><span>中奖（元）</span></div>
+        <div class="stat-box"><b id="myBest">0</b><span>最高单张（元）</span></div>
+      </div>
+      <button class="link-btn" id="btnClearStats" type="button">清空战绩记录</button>
+      <p class="note">战绩保存在本机浏览器（localStorage），不会上传。</p>
+    </div>
+  </section>
+
+  <footer class="foot">
+    奖级金额参考公开票样资料；中奖面 31.91%、返奖率 65%、公益金 20% 为公开数据。<br>
+    本页为技术演示与娱乐用途，与任何彩票发行机构无关，不销售、不兑付任何彩票。
+  </footer>
+</main>
+
+<div class="modal" id="modal" hidden>
+  <div class="modal-card" id="modalCard"></div>
+</div>
+
+<script src="assets/js/data.js"></script>
+<script src="assets/js/scratch.js"></script>
+<script src="assets/js/app.js"></script>
+</body>
+</html>
