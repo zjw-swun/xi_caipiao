@@ -2,7 +2,7 @@
 
 「囍相逢」是一款**独立原创的网页刮刮乐演示**，玩法规则与票面结构参考公开票样资料实现，纯前端静态页面，无依赖、无构建，可直接用浏览器打开或托管到 GitHub Pages。
 
-- 在线地址：https://zjw-swun.github.io/caipiao/
+- 在线地址：https://zjw-swun.github.io/xi_caipiao/
 - 本地预览：`python3 -m http.server 8088` 后访问 http://127.0.0.1:8088
 
 ## 玩法（参考公开票样）
