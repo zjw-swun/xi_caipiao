@@ -56,12 +56,57 @@
       ctx.arc(cx, cy, rad - ctx.lineWidth / 2, 0, Math.PI * 2);
       ctx.stroke();
 
-      // 中央「喜」字纹
+      // 中央纹样：好运区画灯笼，其余画「喜」
+      var isBonus = !!(c.node && c.node.classList && c.node.classList.contains('is-bonus'));
       ctx.fillStyle = 'rgba(248,220,150,0.95)';
-      ctx.font = 'bold ' + Math.round(rad * 0.95) + 'px "STKaiti","KaiTi","SimSun",serif';
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
-      ctx.fillText('喜', cx, cy + rad * 0.05);
+      if (isBonus) {
+        paintLantern(cx, cy, rad);
+      } else {
+        ctx.font = 'bold ' + Math.round(rad * 0.95) + 'px "STKaiti","KaiTi","SimSun",serif';
+        ctx.fillText('喜', cx, cy + rad * 0.05);
+      }
+    }
+
+    function paintLantern(cx, cy, rad) {
+      ctx.save();
+      ctx.translate(cx, cy);
+      ctx.strokeStyle = 'rgba(248,220,150,0.95)';
+      ctx.fillStyle = 'rgba(248,220,150,0.95)';
+      ctx.lineWidth = Math.max(1, rad * 0.05);
+      var bw = rad * 0.52, bh = rad * 0.66;
+      // 顶绳
+      ctx.beginPath();
+      ctx.moveTo(0, -bh - rad * 0.2);
+      ctx.lineTo(0, -bh);
+      ctx.stroke();
+      // 顶盖 / 底盖
+      ctx.fillRect(-bw * 0.5, -bh - rad * 0.1, bw, rad * 0.1);
+      ctx.fillRect(-bw * 0.5, bh, bw, rad * 0.1);
+      // 灯笼腹
+      ctx.beginPath();
+      ctx.ellipse(0, 0, bw, bh, 0, 0, Math.PI * 2);
+      ctx.stroke();
+      // 竖向骨架
+      ctx.beginPath();
+      ctx.ellipse(0, 0, bw * 0.5, bh, 0, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.ellipse(0, 0, bw * 0.18, bh, 0, 0, Math.PI * 2);
+      ctx.stroke();
+      // 底穗
+      ctx.beginPath();
+      ctx.moveTo(0, bh + rad * 0.1);
+      ctx.lineTo(0, bh + rad * 0.36);
+      ctx.moveTo(-bw * 0.18, bh + rad * 0.36);
+      ctx.lineTo(-bw * 0.1, bh + rad * 0.2);
+      ctx.moveTo(0, bh + rad * 0.36);
+      ctx.lineTo(0, bh + rad * 0.2);
+      ctx.moveTo(bw * 0.18, bh + rad * 0.36);
+      ctx.lineTo(bw * 0.1, bh + rad * 0.2);
+      ctx.stroke();
+      ctx.restore();
     }
 
     function paint() {

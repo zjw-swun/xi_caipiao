@@ -88,7 +88,7 @@
       counts: [1, 300, 1200, 2400, 3600, 5000, 6000, 8000, 60802, 231797],
       winRate: 0.3191,
       rtp: 0.65,
-      bookSize: 30,
+      bookSize: 25,
       bookRtpFloor: BOOK_RTP_FLOOR,
       bookRtpTarget: BOOK_RTP_TARGET
     },
