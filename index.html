@@ -24,37 +24,40 @@
     </div>
     <div class="topbar-actions">
       <button class="ghost-btn" id="btnRules" type="button">玩法规则</button>
-      <button class="ghost-btn" id="btnReset" type="button">重置</button>
     </div>
   </header>
 
   <div class="section-title">
     选择票面
-    <span>官方三种面值 · 返奖率 65%</span>
+    <span>四种面值 · 整本玩法</span>
   </div>
   <section class="picker" id="picker"></section>
 
   <section class="stage">
-    <div class="deck" id="deck" title="抽卡池：点「抽一张」从牌堆抽一张票">
-      <span class="deck-card deck-1"></span>
-      <span class="deck-card deck-2"></span>
-      <span class="deck-card deck-3"></span>
-      <span class="deck-label">抽卡池</span>
+    <div class="rack">
+      <div class="rack-head">
+        <span class="rack-title" id="rackTitle">整本票架</span>
+        <span class="rack-hint" id="rackHint">…</span>
+        <span class="rack-count" id="rackCount"></span>
+      </div>
+      <div class="rack-track" id="rackTrack"></div>
     </div>
+
+    <div class="bookbar" id="bookBar"></div>
 
     <div class="ticket" id="ticket"></div>
 
     <div class="controls">
       <button class="primary-btn" id="btnBuy" type="button">抽一张</button>
       <button class="plain-btn" id="btnReveal" type="button">一键刮开</button>
-      <button class="plain-btn" id="btnNext" type="button">换一张</button>
+      <button class="plain-btn" id="btnNewBook" type="button">换一本</button>
       <button class="plain-btn" id="btnTopUp" type="button">领取体验金</button>
     </div>
 
     <div class="hud">
       <div class="hud-item"><b id="hudBalance">0</b><span>体验金（元）</span></div>
       <div class="hud-item"><b id="hudWin">0</b><span>本张中奖（元）</span></div>
-      <div class="hud-item"><b id="hudBought">0</b><span>累计张数</span></div>
+      <div class="hud-item"><b id="hudBookWin">0</b><span>本累计中奖（元）</span></div>
       <div class="hud-item"><b id="hudRtp">0%</b><span>我的返奖率</span></div>
     </div>
 
@@ -67,35 +70,61 @@
   <section class="panel">
     <div class="panel-tabs">
       <button class="panel-tab is-active" data-tab="prize" type="button">奖级与概率</button>
-      <button class="panel-tab" data-tab="sim" type="button">概率验证</button>
       <button class="panel-tab" data-tab="mine" type="button">我的战绩</button>
     </div>
 
     <div class="panel-body" id="tabPrize"></div>
 
     <div class="panel-body" id="tabSim" hidden>
-      <div class="sim-row">
-        <span class="note" style="margin:0">模拟张数</span>
-        <select id="simTimes">
-          <option value="10000">1 万张</option>
-          <option value="100000" selected>10 万张</option>
-          <option value="1000000">100 万张</option>
-        </select>
-        <button class="plain-btn" id="btnSim" type="button" style="color:#7d1a12;background:#ffe9b3;border-color:#e5c266">开始模拟</button>
+      <div class="sim-sec">
+        <div class="sim-title">一、整本口径模拟</div>
+        <div class="sim-row">
+          <span class="note" style="margin:0">模拟本数</span>
+          <select id="simBooksTimes">
+            <option value="100">100 本</option>
+            <option value="500" selected>500 本</option>
+            <option value="2000">2000 本</option>
+          </select>
+          <button class="plain-btn" id="btnSimBooks" type="button" style="color:#7d1a12;background:#ffe9b3;border-color:#e5c266">开始模拟</button>
+        </div>
+        <div class="sim-out">
+          <div class="sim-box"><b id="simBookQualify">—</b><span>整本保底达标率（每本 ≥ 50%）</span></div>
+          <div class="sim-box"><b id="simBookRtp">—</b><span>平均一本返奖率（理论 65%）</span></div>
+          <div class="sim-box"><b id="simBookMedian">—</b><span>中位数一本返奖率</span></div>
+          <div class="sim-box"><b id="simBookOver100">—</b><span>返奖超 100% 的本占比</span></div>
+          <div class="sim-box"><b id="simBookMax">—</b><span>最高单本返奖率</span></div>
+          <div class="sim-box"><b id="simBookHit">—</b><span>单张中奖面（有奖张占比）</span></div>
+          </div>
+          <p class="note">整本玩法口径：每本返奖率 <b>恒 ≥ 50% 保底</b>，大基数下整体均值收敛到 <b>65%</b>（卖家约留存 35% 收益）；分布带右尾，约 5% 的本返奖超过 100%（个别买家整本赚钱），并以官方头奖中奖面让极稀有的本开出满额大奖。单本具体配额不对外公布。</p>
       </div>
-      <div class="sim-out">
-        <div class="sim-box"><b id="simHit">—</b><span>实际中奖面（理论 31.91%）</span></div>
-        <div class="sim-box"><b id="simRtp">—</b><span>实际返奖率（理论 65%）</span></div>
+
+      <div class="sim-sec">
+        <div class="sim-title">二、单张概率模拟（官方口径）</div>
+        <div class="sim-row">
+          <span class="note" style="margin:0">模拟张数</span>
+          <select id="simTimes">
+            <option value="10000">1 万张</option>
+            <option value="100000" selected>10 万张</option>
+            <option value="1000000">100 万张</option>
+          </select>
+          <button class="plain-btn" id="btnSim" type="button" style="color:#7d1a12;background:#ffe9b3;border-color:#e5c266">开始模拟</button>
+        </div>
+        <div class="sim-out">
+          <div class="sim-box"><b id="simHit">—</b><span>实际中奖面（理论 31.91%）</span></div>
+          <div class="sim-box"><b id="simRtp">—</b><span>实际返奖率（理论 65%）</span></div>
+        </div>
+        <div id="simTable"></div>
+        <p class="note">按官方中奖面与奖级权重直接抽样，不含票面拆分与「囍」翻倍，结果收敛于官方口径 31.91% / 65%。</p>
       </div>
-      <div id="simTable"></div>
-      <p class="note">模拟直接按官方中奖面与奖级权重抽样，不含展示用的拆分逻辑，因此结果应稳定收敛于官方公布的中奖面 31.91% 与返奖率 65%。</p>
     </div>
 
     <div class="panel-body" id="tabMine" hidden>
       <div class="my-stats">
+        <div class="stat-box"><b id="myBooks">0</b><span>开过的本（本）</span></div>
         <div class="stat-box"><b id="myBought">0</b><span>购买张数</span></div>
         <div class="stat-box"><b id="myCost">0</b><span>投入（元）</span></div>
         <div class="stat-box"><b id="myWin">0</b><span>中奖（元）</span></div>
+        <div class="stat-box"><b id="myBookWin">0</b><span>本内最高中奖（元）</span></div>
         <div class="stat-box"><b id="myBest">0</b><span>最高单张（元）</span></div>
       </div>
       <button class="link-btn" id="btnClearStats" type="button">清空战绩记录</button>
@@ -104,7 +133,8 @@
   </section>
 
   <footer class="foot">
-    奖级金额参考公开票样资料；中奖面 31.91%、返奖率 65%、公益金 20% 为公开数据。<br>
+    10 / 20 / 30 元奖级参考公开票样资料；50 元票奖级为演示构造数据，其双玩法区（玩法区 10 行 5 列 + 好运区 1 行 5 列）规则为演示设定。<br>
+    整本玩法为演示设定：一本固定张数，实际中奖按整本奖池随机配额分配（单本配额随机，不对玩家公开）。<br>
     本页为技术演示与娱乐用途，与任何彩票发行机构无关，不销售、不兑付任何彩票。
   </footer>
 </main>
@@ -115,6 +145,8 @@
 
 <script src="assets/js/data.js"></script>
 <script src="assets/js/scratch.js"></script>
+
+
 <script src="assets/js/app.js"></script>
 </body>
 </html>

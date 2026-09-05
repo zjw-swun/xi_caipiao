@@ -27,13 +27,14 @@
         var r = c.node.getBoundingClientRect();
         c.cx = r.left - crect.left + r.width / 2;
         c.cy = r.top - crect.top + r.height / 2;
-        c.rad = Math.min(r.width, r.height) / 2 * 0.96;
+        c.rad = Math.max(0, Math.min(r.width, r.height) / 2 * 0.96);
       });
     }
 
     function paintCell(c) {
       if (c.revealed) return;
       var cx = c.cx, cy = c.cy, rad = c.rad;
+      if (!isFinite(cx) || !isFinite(cy) || !isFinite(rad) || rad <= 0.5) return;
 
       // 红色圆形覆盖膜（圆外保持透明 → 外观纯圆）
       ctx.save();
