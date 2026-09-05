@@ -655,11 +655,11 @@ body::before {
   background: rgba(120, 8, 18, 0.24);
 }
 
-.grid-bonus { gap: 5px 4px; }
+.grid-bonus { gap: 5px 4px; width: min(236px, 100%); margin: 0 auto; }
 
 .cell.is-bonus .cell-sym.is-label {
   font-family: "STKaiti", "Kaiti SC", "KaiTi", serif;
-  font-size: 19px;
+  font-size: 17px;
   font-weight: 900;
   line-height: 1.05;
   letter-spacing: 1px;
@@ -669,7 +669,7 @@ body::before {
 
 .cell.is-bonus.is-open .cell-sym.is-label {
   color: #c0101f;
-  font-size: 22px;
+  font-size: 17px;
   text-shadow: 0 1px 0 #fff3c9;
 }
 
@@ -932,6 +932,15 @@ table.prize tr.is-top td.amt { color: #b06a00; }
   text-decoration: underline;
   cursor: pointer;
 }
+
+.my-actions {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 12px;
+}
+
+.link-btn.danger { color: #c0202f; }
 
 .prize-verify {
   text-align: right;

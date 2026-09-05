@@ -84,6 +84,7 @@
     myBookWin: document.getElementById('myBookWin'),
     myBest: document.getElementById('myBest'),
     btnClearStats: document.getElementById('btnClearStats'),
+    btnResetAll: document.getElementById('btnResetAll'),
     modal: document.getElementById('modal'),
     modalCard: document.getElementById('modalCard')
   };
@@ -1193,6 +1194,32 @@
     saveState();
     updateHudOnly();
   });
+
+  // 完全重置：清空 localStorage 全部存档，还原到初始状态（体验金 200、各面额重新开本）
+  function resetAll() {
+    if (!window.confirm('确定要清空所有记录、把全部数据还原到初始状态吗？此操作不可撤销。')) return;
+    try {
+      localStorage.removeItem(BALANCE_KEY);
+      localStorage.removeItem(STATS_KEY);
+      localStorage.removeItem(BOOK_KEY);
+      localStorage.removeItem(GAME_KEY);
+    } catch (e) { /* ignore */ }
+    state.game = XF.getGame('xf10');
+    state.books = {};
+    state.book = null;
+    state.current = null;
+    state.store = { seqs: {}, books: {} };
+    state.balance = 200;
+    state.stats = { bought: 0, cost: 0, win: 0, best: 0, hits: 0, books: 0, bookBest: 0 };
+    renderPicker();
+    renderPrizeTable();
+    useGame(state.game); // 重新开当前面额（xf10）的那一本
+    saveState();
+    syncUI();
+    updateHudOnly();
+  }
+
+  el.btnResetAll.addEventListener('click', resetAll);
 
   Array.prototype.forEach.call(document.querySelectorAll('.panel-tab'), function (tab) {
     tab.addEventListener('click', function () {
