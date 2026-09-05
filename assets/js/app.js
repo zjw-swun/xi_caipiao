@@ -96,7 +96,8 @@
     current: null,   // 当前手牌（book.tickets 中的一项；刮开结算后仍保留用于展示）
     store: null,     // 本的持久化存档：{ seqs:{gameId:n}, books:{gameId:book} }
     balance: 0,
-    stats: { bought: 0, cost: 0, win: 0, best: 0, hits: 0, books: 0, bookBest: 0 }
+    stats: { bought: 0, cost: 0, win: 0, best: 0, hits: 0, books: 0, bookBest: 0 },
+    cards: []
   };
 
   /* ---------------- 存储 ---------------- */
@@ -259,6 +260,13 @@
     return state.current ? (state.current._openCells || []).length : 0;
   }
 
+  /** 手牌是否刮过（哪怕面积没到阈值、格子未触发 finishCell 也算） */
+  function handHasScratch() {
+    if (handOpenCount() > 0) return true;
+    var cards = state.cards || [];
+    return cards.length && cards.some(function (c) { return c.hasScratched && c.hasScratched(); });
+  }
+
   function handTotalCells() {
     if (!state.current) return 0;
     return XF.ticketCells(state.game, state.current).length;
@@ -283,8 +291,8 @@
   }
 
   /**
-   * 从票架上取一张到手上。target 为 null 时随机取一张；pay=true 为付费抽取。
-   * 只有付了钱，才能得到一张奖券（换票另走 swapTo，不额外扣费）。
+   * 从票架上取一张到手上。target 为 null 时随机取一张。
+   * 抽取不扣费，结算时（creditTicket）才扣票面价格；切换走 swapTo 免费换票。
    */
   function drawTicket(target, pay) {
     var g = state.game;
@@ -300,14 +308,9 @@
       showTopUpModal('抽取一张 ¥' + g.price + ' 奖券');
       return false;
     }
-    if (pay) {
-      state.balance -= g.price;
-      state.stats.bought += 1;
-      state.stats.cost += g.price;
-    }
     setHand(t);
-    t._revealed = 0;
-    t._openCells = [];
+    t._revealed = t._revealed || 0;
+    t._openCells = Array.isArray(t._openCells) ? t._openCells : [];
     saveState();
     saveBooks();
     syncUI();
@@ -332,14 +335,14 @@
   function swapTo(target) {
     var cur = state.current;
     if (!hasLiveHand() || !target || target.done || target.settled) return;
-    if (handOpenCount() > 0) { showDiscardModal(); return; } // 防御：已刮部分走放弃
     if (target === cur) return;
-    setHand(target);
-    target._revealed = 0;
-    target._openCells = [];
-    saveBooks();
-    syncUI();
-    dealAnimation();
+    if (handHasScratch()) {
+      // 已刮过：一键刮开剩余并结算，结算后自动切换
+      pendingAfterSettle = function () { doSwapTo(target); };
+      revealAll();
+      return;
+    }
+    doSwapTo(target);
   }
 
   /** 把一张票的已开格奖金结算入账（全刮或放弃部分结算共用） */
@@ -348,6 +351,10 @@
     t.settled = true;
     t.done = true;
     state.book.opened += 1;
+    var price = state.book.price || state.game.price;
+    state.balance -= price;
+    state.stats.bought += 1;
+    state.stats.cost += price;
     var amt = t._revealed || 0;
     if (amt > 0) {
       state.balance += amt;
@@ -398,6 +405,18 @@
 
   var pendingDrawTarget = null; // null = 随机抽一张
   var pendingSwitchGame = null;
+  var pendingAfterSettle = null; // 结算后自动执行的切换回调
+
+  /** 实际换票逻辑（不检查已刮开状态，由 swapTo / 结算回调保证前置条件） */
+  function doSwapTo(target) {
+    if (!target || target.done || target.settled) return;
+    setHand(target);
+    target._revealed = target._revealed || 0;
+    target._openCells = Array.isArray(target._openCells) ? target._openCells : [];
+    saveBooks();
+    syncUI();
+    dealAnimation();
+  }
 
   /** 切换/抽取前确认：作废当前手牌（不返还体验金） */
   function confirmVoidAndDraw(t) {
@@ -443,10 +462,10 @@
   function showTicketResult(t, finished, amt) {
     if (finished) {
       openModal(
-        '<div class="modal-badge">本</div>' +
+        '<div class="modal-badge">第 ' + state.book.no + ' 本</div>' +
         '<h3 class="modal-title">第 ' + state.book.no + ' 本已全部刮完</h3>' +
         '<div class="modal-amount">¥ ' + XF.money(state.book.openedWin) + '</div>' +
-        '<p class="modal-desc">本本共 ' + state.book.bookSize + ' 张，累计中奖 <b>¥' + XF.money(state.book.openedWin) + '</b>' +
+        '<p class="modal-desc">一本共 ' + state.book.bookSize + ' 张，累计中奖 <b>¥' + XF.money(state.book.openedWin) + '</b>' +
         '，已计入战绩。拆开一本新奖券，再点上方票架中的一张抽取继续。</p>' +
         '<div class="modal-actions">' +
           '<button class="plain-btn" data-act="close" type="button" style="color:#7d1a12;background:#ffe9b3;border-color:#e5c266">收下</button>' +
@@ -488,8 +507,8 @@
       '<h3 class="modal-title">' + (finished ? '这本已刮完' : '已放弃这张奖券') + '</h3>' +
       '<div class="modal-amount">¥ ' + XF.money(amt) + '</div>' +
       '<p class="modal-desc">' +
-        '该张未刮开的区域已作废，仅发放已刮开格子的奖金 <b>¥' + XF.money(amt) + '</b>（已存入体验金）。' +
-        (finished ? '本本累计中奖 ¥' + XF.money(state.book.openedWin) + '，已计入战绩。' : '想继续就从上方票架再抽取一张（¥' + state.game.price + '）。') +
+        '该张未刮开的区域不再兑奖，仅发放已刮开格子的奖金 <b>¥' + XF.money(amt) + '</b>（已存入体验金）。' +
+        (finished ? '一本累计中奖 ¥' + XF.money(state.book.openedWin) + '，已计入战绩。' : '想继续就从上方票架再抽取一张（¥' + state.game.price + '）。') +
       '</p>' +
       '<div class="modal-actions">' +
         '<button class="plain-btn" data-act="close" type="button" style="color:#7d1a12;background:#ffe9b3;border-color:#e5c266">知道了</button>' +
@@ -510,7 +529,7 @@
       '<h3 class="modal-title">放弃这张并换新票？</h3>' +
       '<p class="modal-desc">本张已刮开 <b>' + open + ' / ' + total + '</b> 个玩法区。' +
         '放弃后：已刮开格子的奖金（当前 <b>¥' + cur + '</b>）立即结算入账，' +
-        '<b>未刮开的区域不再兑奖</b>。<br>随后可从上方票架重新抽取一张（另付 ¥' + state.game.price + '）。</p>' +
+        '<b>未刮开的区域不再兑奖</b>。</p>' +
       '<div class="modal-actions">' +
         '<button class="plain-btn" data-act="close" type="button" style="color:#7d1a12;background:#ffe9b3;border-color:#e5c266">再刮刮看</button>' +
         '<button class="primary-btn" data-act="discard" type="button">放弃并结算</button>' +
@@ -525,12 +544,12 @@
     if (hasLiveHand()) {
       handNote = handOpenCount() > 0
         ? '<br>当前手牌已刮开部分将按已开格结算；'
-        : '<br>当前手牌未刮开，将直接作废；';
+        : '<br>当前手牌未刮开，将直接放回；';
     }
     openModal(
       '<div class="modal-badge" style="color:#9a8b7a">本</div>' +
       '<h3 class="modal-title">确定换一本？</h3>' +
-      '<p class="modal-desc">换本后，本中剩余 <b>' + remain + '</b> 张未刮奖券全部作废封存；' +
+      '<p class="modal-desc">换本后，本中剩余 <b>' + remain + '</b> 张未刮奖券全部封存；' +
         '已结算的中奖与开本记录保留。' + handNote + '将拆开一本新的继续。</p>' +
       '<div class="modal-actions">' +
         '<button class="plain-btn" data-act="close" type="button" style="color:#7d1a12;background:#ffe9b3;border-color:#e5c266">再想想</button>' +
@@ -588,26 +607,21 @@
 
   el.modalCard.addEventListener('click', function (e) {
     var act = e.target.getAttribute && e.target.getAttribute('data-act');
-    if (act === 'close') { closeModal(); return; }
+    if (act === 'close') {
+      closeModal();
+      if (pendingAfterSettle) {
+        var cb = pendingAfterSettle; pendingAfterSettle = null;
+        setHand(null); // 清除已结算的手牌
+        cb();
+      }
+      return;
+    }
     if (act === 'topup') { topUp(); closeModal(); syncUI(); return; }
-    if (act === 'again') { closeModal(); drawNext(); return; }
-    if (act === 'discard') { closeModal(); discardHand(); return; }
-    if (act === 'doNewBook') { closeModal(); doNewBook(); return; }
-    if (act === 'cancel') { closeModal(); pendingDrawTarget = null; pendingSwitchGame = null; return; }
-    if (act === 'voidConfirm') {
-      closeModal();
-      var tgt = pendingDrawTarget; pendingDrawTarget = null;
-      voidCurrentHand();
-      drawTicket(tgt, true);
-      return;
-    }
-    if (act === 'voidSwitch') {
-      closeModal();
-      var sg = pendingSwitchGame; pendingSwitchGame = null;
-      voidCurrentHand();
-      doSwitchGame(sg);
-      return;
-    }
+    if (act === 'again') { closeModal(); pendingAfterSettle = null; drawNext(); return; }
+    if (act === 'discard') { closeModal(); pendingAfterSettle = null; discardHand(); return; }
+    if (act === 'doNewBook') { closeModal(); pendingAfterSettle = null; doNewBook(); return; }
+    if (act === 'cancel') { closeModal(); pendingDrawTarget = null; pendingSwitchGame = null; pendingAfterSettle = null; return; }
+
   });
 
   /* ---------------- 体验金 ---------------- */
@@ -632,7 +646,16 @@
         '<div class="tcard-top">一本 ¥' + g.sales + '</div>';
       div.addEventListener('click', function () {
         if (state.game.id === g.id) return;
-        if (hasLiveHand()) { confirmVoidAndSwitch(g); return; }
+        if (hasLiveHand()) {
+          if (handHasScratch()) {
+            // 已刮过：一键刮开剩余并结算，结算后自动切换面额
+            pendingAfterSettle = function () { setHand(null); doSwitchGame(g); };
+            revealAll();
+            return;
+          }
+          setHand(null); // 未刮开：放回票架，直接切换面额
+          saveBooks();
+        }
         doSwitchGame(g);
       });
       el.picker.appendChild(div);
@@ -647,9 +670,9 @@
     var g = state.game;
     if (!b) return '先点「换一本」开启一本';
     if (hasLiveHand()) {
-      return handOpenCount() > 0
-        ? '本张已刮开部分：换票将作废当前（未刮开区域不兑奖）'
-        : '手中有第 ' + state.current.no + ' 张（未刮）· 点其他张/换面额将作废当前并更换';
+      return handHasScratch()
+        ? '本张已刮过：换票将一键刮开剩余并结算'
+        : '手中有第 ' + state.current.no + ' 张（未刮）· 点其他张/换面额可免费换票';
     }
     if (b.done) return '这本已全部刮完 · 点「换一本」再开一本';
     if (state.balance < g.price) return '体验金不足 · 先领取再抽取';
@@ -710,7 +733,7 @@
     if (!t || t.done || t.settled) return;    // 已结算槽不可点
     if (t === state.current) return;           // 手中这张（已在下方票面）
     if (hasLiveHand()) {
-      confirmVoidAndDraw(t); // 任意场景切换奖券都要先作废当前手牌（不返还体验金）
+      swapTo(t); // 有手牌：免费换票（未刮开放回，已刮开走放弃确认）
       return;
     }
     if (b.done) { showBookDoneModal(); return; }
@@ -992,7 +1015,7 @@
     // 一键刮开：有未结算手牌
     var rev = el.btnReveal;
     rev.disabled = !live;
-    rev.textContent = live && handOpenCount() > 0 ? '刮开剩余并结算' : '一键刮开';
+    rev.textContent = '一键刮开';
 
     // 换一本：本未刮完且无体验金时不允许（规则）；整本刮完后始终允许开新本（取票时才收费）
     el.btnNewBook.disabled = !state.book || (bookLeftCount() > 0 && !afford);
@@ -1121,9 +1144,9 @@
         '<p>四、中奖机会：10 元票 10 次（2 行 5 列）；20 元票 25 次（5 行 5 列）；30 元票 40 次（8 行 5 列）；' +
         '50 元票 55 次（玩法区 10 行 5 列 + 好运区 1 行 5 列）。50 元票顶部「<b>好运区</b>」五个单元<b>未刮开前均为「喜」字膜</b>，刮开后未中奖单元显示' +
         '「吉祥 / 快乐 / 如意 / 幸运 / 平安」中文字，<b>刮出奖金金额即中奖</b>，与玩法区奖金兼中兼得。</p>' +
-        '<p>五、<b>切换奖券会作废当前手中这张</b>：无论是点票架中另一张、点「抽一张」还是切换面额，只要手中还有未结算的奖券，都会先提示「作废（已付体验金不返还）」确认后才更换；' +
-        '已刮开格子的奖金会立即结算入账，<b>未刮开区域不再兑奖</b>。</p>' +
-        '<p>六、「换一本」将作废当前本剩余奖券并拆开一本新的；本页<b>不涉及真实资金、不可兑奖</b>，公益金 20% 为模拟示意。</p>' +
+        '<p>五、<b>切换奖券可免费换票</b>：无论是点票架中另一张、点「抽一张」还是切换面额，只要手中还有未刮开的奖券，直接放回票架免费更换；' +
+        '若已刮开部分格子，则先结算已刮开奖金再更换，<b>未刮开区域不再兑奖</b>。</p>' +
+        '<p>六、「换一本」将封存当前本剩余奖券并拆开一本新的；本页<b>不涉及真实资金、不可兑奖</b>，公益金 20% 为模拟示意。</p>' +
       '</div>' +
       '<div class="modal-actions">' +
         '<button class="primary-btn" data-act="close" type="button">开始刮奖</button>' +
@@ -1134,7 +1157,17 @@
   /* ---------------- 事件绑定 ---------------- */
 
   el.btnBuy.addEventListener('click', function () {
-    if (hasLiveHand()) { confirmVoidAndDraw(null); return; } // 作废当前并随机抽一张
+    if (hasLiveHand()) {
+      if (handHasScratch()) {
+        // 已刮过：一键刮开剩余并结算，结算后自动抽新票
+        pendingAfterSettle = function () { drawTicket(null, true); };
+        revealAll();
+        return;
+      }
+      setHand(null); // 未刮开：放回票架，免费换一张
+      saveBooks();
+      syncUI();
+    }
     drawTicket(null, true);
   });
   el.btnReveal.addEventListener('click', revealAll);

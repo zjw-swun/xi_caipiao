@@ -15,6 +15,7 @@
     var drawing = false;
     var counter = 0;
     var lineW = 12;
+    var scratched = false;
     var cells = (opts.cells || []).map(function (c) {
       return { node: c.node, onReveal: c.onReveal, cx: 0, cy: 0, rad: 0, revealed: false };
     });
@@ -24,10 +25,11 @@
     function computeCells() {
       var crect = canvas.getBoundingClientRect();
       cells.forEach(function (c) {
-        var r = c.node.getBoundingClientRect();
+        var circle = c.node.querySelector ? c.node.querySelector('.cell-circle') : null;
+        var r = (circle || c.node).getBoundingClientRect();
         c.cx = r.left - crect.left + r.width / 2;
         c.cy = r.top - crect.top + r.height / 2;
-        c.rad = Math.max(0, Math.min(r.width, r.height) / 2 * 0.96);
+        c.rad = Math.max(0, Math.min(r.width, r.height) / 2 * 1.0);
       });
     }
 
@@ -65,7 +67,7 @@
         paintLantern(cx, cy, rad);
       } else {
         ctx.font = 'bold ' + Math.round(rad * 0.95) + 'px "STKaiti","KaiTi","SimSun",serif';
-        ctx.fillText('喜', cx, cy + rad * 0.05);
+        ctx.fillText('喜', cx, cy);
       }
     }
 
@@ -136,6 +138,7 @@
     }
 
     function scratchTo(p) {
+      scratched = true;
       ctx.globalCompositeOperation = 'destination-out';
       ctx.lineWidth = lineW;
       ctx.lineCap = 'round';
@@ -225,6 +228,7 @@
     this.clearAll = function () {
       cells.forEach(function (c, i) { if (!c.revealed) finishCell(i, false); });
     };
+    this.hasScratched = function () { return scratched; };
     this.resize = function () { resize(); };
   }
 
